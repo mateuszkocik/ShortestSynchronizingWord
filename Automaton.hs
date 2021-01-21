@@ -9,15 +9,19 @@ module Automaton
 
 type Symbol = String
 
+type StateID = Int
+
 data Transition = Transition {symbol :: Symbol,
-                              toState :: StateID}
+                              toState :: StateID
+                              }deriving (Show)
 
 data State = State {stateId :: StateID,
-                    transitions :: [Transition]}
+                    transitions :: [Transition]
+                    }deriving (Show)
 
-type StateID = Int
 
 data Automaton = Automaton {alphabet :: [Symbol],
                             states :: [State],
-                            size :: Int}
+                            size :: Int
+                            }deriving (Show)
 

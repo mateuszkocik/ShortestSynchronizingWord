@@ -1,4 +1,5 @@
 import System.Environment
+import Automaton
 
 split :: String -> Char -> [String]
 split [] _ = [""]
@@ -7,22 +8,28 @@ split (x:xs) regex
              | otherwise = (x : head rest) : tail rest
               where rest = split xs regex
 
-getTransitionsFromBracket :: String -> (String, String)
-getTransitionsFromBracket bracket = (state, symbol)
-                        where splittedBracket = split bracket ','
-                              state = tail $ head splittedBracket
-                              symbol = init $ last splittedBracket
+parseTransition :: String -> Transition
+parseTransition bracket = Transition symbol state
+                          where splittedBracket = split bracket ','
+                                symbol = show $ tail $ head splittedBracket
+                                state = read $ init $ last splittedBracket
 
-getStateDescription :: String -> (String,[(String,String)])
-getStateDescription line = (head splittedLine, map (getTransitionsFromBracket) (tail splittedLine))
+parseState :: String -> State
+parseState line = State (read $ head splittedLine)  (map (parseTransition) (tail splittedLine))
                         where splittedLine = split line ' '
 
-getAutomatonDescription :: [String] -> [(String,[(String,String)])]
-getAutomatonDescription line = map (getStateDescription) line
+parseAlphabet :: String -> [Symbol]
+parseAlphabet = flip split ','
+
+parseAutomaton :: [String] -> Automaton
+parseAutomaton (alphabetLine:stateLines) = Automaton alphabet states size
+                                          where alphabet = parseAlphabet alphabetLine
+                                                states = map parseState stateLines
+                                                size = length states
 
 main :: IO ()
 main = do
   (fileName : _) <- getArgs
   fileContent <- readFile fileName
   let fileLines = (lines fileContent)
-  print (getAutomatonDescription fileLines)
+  print (parseAutomaton fileLines)
