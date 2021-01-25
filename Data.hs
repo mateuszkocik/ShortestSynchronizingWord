@@ -1,6 +1,7 @@
 module Data
 (
     catMaybes,
+    unsafeCatMaybe,
     Queue(..),
     push,
     pop,
@@ -15,17 +16,20 @@ module Data
 catMaybes :: [Maybe a] -> [a]
 catMaybes ls = [x | Just x <- ls]
 
-data Queue a = Empty | Queue [a] [a]
+unsafeCatMaybe :: Maybe a -> a
+unsafeCatMaybe (Just a) = a
+
+data Queue a = EmptyQueue | Queue [a] [a] deriving Show
 
 push :: Queue a -> a -> Queue a
-push Empty x = Queue [x] []
+push EmptyQueue x = Queue [x] []
 push (Queue front back) x = Queue front (x:back)
 
 pop :: Queue a -> Maybe (a,Queue a)
-pop Empty = Nothing
+pop EmptyQueue = Nothing
 pop (Queue [] back) = pop $ Queue (reverse back) []
 pop (Queue (value:frontRest) back) = Just (value, reducedQueue)
-                                 where reducedQueue = if null frontRest && null back then Empty
+                                 where reducedQueue = if null frontRest && null back then EmptyQueue
                                                       else Queue frontRest back
 
 -- No Digits Binary
@@ -60,7 +64,10 @@ data Tree a = EmptyTree | Node a (Tree a) (Tree a) deriving Show
 
 buildTreeFromSortedList :: (Ord a) => [a] -> Tree a
 buildTreeFromSortedList [] = EmptyTree
-buildTreeFromSortedList (x:xs) = Node x (buildTreeFromSortedList half1) (buildTreeFromSortedList half2)
-                                where (half1,half2) = splitAt (length xs `div` 2) xs
+buildTreeFromSortedList list = Node (list !! half) 
+                                    (buildTreeFromSortedList (take half list)) 
+                                    (buildTreeFromSortedList (drop (half+1) list))
+                            where 
+                                half = length list `quot` 2
 
 

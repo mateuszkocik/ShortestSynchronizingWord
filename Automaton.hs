@@ -37,8 +37,10 @@ getTransition :: State -> Symbol -> Maybe (Int)
 getTransition s a = getTransition' (transitions s) a
                   where
                       getTransition' [] _ = Nothing
-                      getTransition' (x:xs) a = if (symbol x == a) then Just $ toState x
-                                                else getTransition' xs a
+                      getTransition' (x:xs) a = if (symbol x == a) then 
+                                                    Just $ toState x
+                                                else 
+                                                    getTransition' xs a
 
 data Automaton = Automaton {alphabet :: [Symbol],
                             automatonSize :: Int,
