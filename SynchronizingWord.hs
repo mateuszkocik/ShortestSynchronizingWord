@@ -1,6 +1,10 @@
 module SynchronizingWord(
     buildPowerSet,
-    getShortestSynchronizingWord
+    getShortestSynchronizingWord,
+    findStateInfo,
+    markAndPushIfNotVisited,
+    findSSW,
+    StateInfo(..)
 ) where
 import Automaton
 import Data
@@ -19,21 +23,20 @@ instance Ord StateInfo where
     (StateInfo s1 _ _) `compare` (StateInfo s2 _ _) = s1 `compare` s2
 
 
---improvement dont call build transition for separate symbol but for alphabet
 buildTransition :: Automaton -> Symbol -> [Int] -> [Int] -> Maybe(Transition)
 buildTransition _ _ [] []                     = Nothing
 buildTransition _ sym [] availableS           = Just $ Transition sym (sum availableS)
-buildTransition aut sym (next:pos) availableS = if fst wasBefore then
-                                                    buildTransition aut sym pos availableS
-                                                else 
-                                                    buildTransition aut sym pos ((snd wasBefore):availableS)
+buildTransition aut sym (next:pos) availableS  
+                                                | nextStateIsNothing    = Nothing
+                                                | fst wasBefore         = buildTransition aut sym pos availableS
+                                                | otherwise             = buildTransition aut sym pos ((snd wasBefore):availableS)
                                             where
-                                                singletonStates     = states aut
-                                                stateOnPos          = singletonStates !! next
-                                                nextStateTransition = getTransition stateOnPos sym
-                                                wasBefore           = isInAvailableS nextStateTransition
-                                                isInAvailableS :: Maybe Int -> (Bool, Int)
-                                                isInAvailableS Nothing  = (True,-1)
+                                                singletonStates         = states aut
+                                                stateOnPos              = singletonStates !! next
+                                                nextStateTransition     = getTransition stateOnPos sym
+                                                nextStateIsNothing      = nextStateTransition == Nothing
+                                                
+                                                wasBefore               = isInAvailableS nextStateTransition
                                                 isInAvailableS (Just t) = (t `elem` availableS,t)
                                                 
 buildTransitions :: Automaton -> [Int] -> [Transition]
@@ -52,8 +55,6 @@ getState automaton x  = if sSize == 1 then
 createNewStateInfo :: State -> StateInfo
 createNewStateInfo s = StateInfo s EmptySI False
 
--- buildPowerSet :: Automaton -> [State]
--- buildPowerSet automaton = map (getState automaton) [1..(2^(automatonSize automaton) - 1)]
 buildPowerSet :: Automaton -> Tree StateInfo
 buildPowerSet aut = buildTreeFromSortedList (map (createNewStateInfo . getState aut) [1..powerSetSize])
                         where powerSetSize = 2^(automatonSize aut) - 1
@@ -68,17 +69,19 @@ findStateInfo (Node a l r) x
 
 markAndPushIfNotVisited :: Tree StateInfo -> Queue StateInfo -> Int -> StateInfo -> (Tree StateInfo, Queue StateInfo)
 markAndPushIfNotVisited (Node a l r) q x anc
-            | x == s = if isAlreadyVisited then (Node a l r, q) else (Node updatedState l r, push q updatedState)
+            | x == s = if visited a then 
+                            (Node a l r, q)
+                       else 
+                           (Node updatedState l r, push q updatedState)
             | x > s = (Node a l (fst rightResult), snd rightResult)
             | x < s = (Node a (fst leftResult) r, snd leftResult)
             where s = stateId (state a)
-                  isAlreadyVisited = visited a
                   updatedState = StateInfo (state a) anc True
                   leftResult = markAndPushIfNotVisited l q x anc
                   rightResult = markAndPushIfNotVisited r q x anc
 
 getStatesInfoFromTransitions :: Tree StateInfo -> [Transition] -> [StateInfo]
-getStatesInfoFromTransitions pS = map(findStateInfo pS . toState)
+getStatesInfoFromTransitions pS transit = map(\x -> (findStateInfo pS (toState x))) transit
 
 loop :: Tree StateInfo -> Queue StateInfo -> StateInfo -> [StateInfo] -> (Tree StateInfo, Queue StateInfo)
 loop pS q _ [] = (pS,q)
@@ -92,25 +95,25 @@ getTransitionSymbol from to = symbol(head(filter (\x -> (toState x) == (stateId 
                                 fromState = state from
                                 tS = state to
 
-convertToSSW' :: StateInfo -> [Symbol] -> [Symbol]
-convertToSSW' EmptySI acc = acc
-convertToSSW' s acc =  (getTransitionSymbol anc s):acc 
-                    where
-                        anc = ancestor s
+getPathFromRoot' :: StateInfo -> StateInfo -> [Symbol] -> [Symbol]
+getPathFromRoot' _ EmptySI ssw = ssw
+getPathFromRoot' x anc ssw = (getTransitionSymbol anc x) : (getPathFromRoot' anc (ancestor anc) ssw)
 
-convertToSSW :: StateInfo -> SSW
-convertToSSW s = convertToSSW' s []
+getPathFromRoot :: StateInfo -> SSW
+getPathFromRoot s = getPathFromRoot' s (ancestor s) []
 
+setAncestor :: StateInfo -> StateInfo -> StateInfo
+setAncestor x anc = StateInfo (state x) anc (visited x)
 
 processUntilEmptyQueue :: Tree StateInfo -> Queue StateInfo -> Maybe(SSW)
 processUntilEmptyQueue _ EmptyQueue = Nothing
-processUntilEmptyQueue powerSet queue = if null singletons then processUntilEmptyQueue (fst updatedDataStructures) (snd updatedDataStructures)
-                                        else Just (convertToSSW (head singletons))
+processUntilEmptyQueue powerSet queue = if length singletons == 0 then processUntilEmptyQueue (fst updatedDataStructures) (snd updatedDataStructures)
+                                        else Just (getPathFromRoot (setAncestor (head singletons) stateToProcess))
                                     where
                                         popResult       = unsafeCatMaybe (pop queue)
                                         queueAfterPop   = snd popResult
                                         stateToProcess  = fst popResult
-                                        available       = getStatesInfoFromTransitions powerSet (transitions $ state stateToProcess)
+                                        available       = getStatesInfoFromTransitions powerSet (transitions (state stateToProcess))
                                         singletons      = filter (\x -> stateSize (state x) == 1) available
                                         updatedDataStructures = loop powerSet queueAfterPop stateToProcess available
 
@@ -126,4 +129,4 @@ getShortestSynchronizingWord :: Automaton -> String
 getShortestSynchronizingWord = returnMessage . findSSW
                             where 
                                 returnMessage Nothing = "Automaton not synchronizing"
-                                returnMessage (Just x) = (convertSSWToString x)
+                                returnMessage (Just x) = (convertSSWToString (reverse x))
